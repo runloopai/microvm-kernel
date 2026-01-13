@@ -21,18 +21,18 @@ env:
 jobs:
   build-kernel:
     name: Build Kernel (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    runs-on:
+      group: Default Larger Runners
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86_64
-            runner:
-              group: Default Larger Runners
-            yq_binary: yq_linux_amd64
+            build_arch: x86_64
+            cross_compile_pkgs: ""
           - arch: arm64
-            runner: ubuntu-24.04-arm
-            yq_binary: yq_linux_arm64
+            build_arch: aarch64
+            cross_compile_pkgs: gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
     steps:
       - name: Checkout
@@ -41,11 +41,23 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y flex bison libelf-dev build-essential bc curl git
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            cpio \
+            curl \
+            flex \
+            git \
+            libelf-dev \
+            libssl-dev \
+            python3 \
+            rsync \
+            ${{ matrix.cross_compile_pkgs }}
 
       - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/${{ matrix.yq_binary }}
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod a+x /usr/local/bin/yq
 
       - name: Generate version string
@@ -59,22 +71,29 @@ jobs:
 
       - name: Setup kernel source
         working-directory: packaging/kernel
-        run: ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} -f setup
+        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} -f setup
 
       - name: Build kernel
         working-directory: packaging/kernel
-        run: ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} build
+        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} build
 
       - name: Install kernel artifacts
         working-directory: packaging/kernel
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
-          DESTDIR=${{ github.workspace }}/artifacts ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} install
+          DESTDIR=${{ github.workspace }}/artifacts ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} install
 
-      - name: List artifacts
+      - name: Create tarball
+        id: tarball
         run: |
-          echo "Built artifacts:"
-          find ${{ github.workspace }}/artifacts -type f -name "vm*" -o -name "config-*" | head -20
+          TARBALL_NAME="${{ steps.version.outputs.version_string }}-${{ matrix.arch }}.tar.gz"
+          echo "tarball_name=${TARBALL_NAME}" >> $GITHUB_OUTPUT
+          cd ${{ github.workspace }}/artifacts/usr/share/kata-containers
+          echo "Creating tarball with:"
+          ls -la
+          tar -cvzf ${{ github.workspace }}/${TARBALL_NAME} .
+          echo "Tarball created: ${TARBALL_NAME}"
+          ls -lh ${{ github.workspace }}/${TARBALL_NAME}
 
       - name: Configure AWS credentials
         uses: runloopai/configure-aws-credentials@main
@@ -84,21 +103,16 @@ jobs:
 
       - name: Upload to S3
         run: |
-          S3_PATH="s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.version.outputs.version_string }}/${{ matrix.arch }}/"
+          S3_PATH="s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.tarball.outputs.tarball_name }}"
           echo "Uploading to: ${S3_PATH}"
-          aws s3 cp ${{ github.workspace }}/artifacts/usr/share/kata-containers/ "${S3_PATH}" \
-            --recursive \
-            --exclude "*" \
-            --include "vmlinuz-*" \
-            --include "vmlinux-*" \
-            --include "config-*"
+          aws s3 cp ${{ github.workspace }}/${{ steps.tarball.outputs.tarball_name }} "${S3_PATH}"
           echo "Upload complete"
 
       - name: Upload artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: kernel-${{ matrix.arch }}-${{ steps.version.outputs.version_string }}
-          path: ${{ github.workspace }}/artifacts/usr/share/kata-containers/
+          path: ${{ github.workspace }}/${{ steps.tarball.outputs.tarball_name }}
           retention-days: 7
 
   upload-summary:
@@ -131,4 +145,4 @@ jobs:
           echo "Version: ${{ steps.version.outputs.version_string }}"
           echo ""
           echo "Uploaded files:"
-          aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.version.outputs.version_string }}/" --recursive
+          aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/" | grep "${{ steps.version.outputs.version_string }}"
