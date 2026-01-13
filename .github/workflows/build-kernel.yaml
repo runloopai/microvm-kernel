@@ -1,0 +1,31 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-24.04
+    group: Default Larger Runners
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flex bison libelf-dev build-essential bc curl git
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod a+x /usr/local/bin/yq
+
+      - name: Build Kernel
+        working-directory: packaging/kernel
+        run: |
+          ./build-kernel.sh -v 6.18.5 -f setup
+          ./build-kernel.sh -v 6.18.5 build
