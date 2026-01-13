@@ -2,14 +2,38 @@ name: Build Kernel
 
 on:
   workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Kernel version to build'
+        required: false
+        default: '6.18.5'
   push:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.5' }}
+
 jobs:
   build-kernel:
-    runs-on: ubuntu-24.04
-    group: Default Larger Runners
+    name: Build Kernel (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner:
+              group: Default Larger Runners
+            yq_binary: yq_linux_amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            yq_binary: yq_linux_arm64
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,11 +45,90 @@ jobs:
 
       - name: Install yq
         run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/${{ matrix.yq_binary }}
           sudo chmod a+x /usr/local/bin/yq
 
-      - name: Build Kernel
+      - name: Generate version string
+        id: version
+        run: |
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          VERSION_STRING="linux-${{ env.KERNEL_VERSION }}-runloop-${DATE}-${SHORT_SHA}"
+          echo "version_string=${VERSION_STRING}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${VERSION_STRING}"
+
+      - name: Setup kernel source
+        working-directory: packaging/kernel
+        run: ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} -f setup
+
+      - name: Build kernel
+        working-directory: packaging/kernel
+        run: ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} build
+
+      - name: Install kernel artifacts
         working-directory: packaging/kernel
         run: |
-          ./build-kernel.sh -v 6.18.5 -f setup
-          ./build-kernel.sh -v 6.18.5 build
+          mkdir -p ${{ github.workspace }}/artifacts
+          DESTDIR=${{ github.workspace }}/artifacts ./build-kernel.sh -v ${{ env.KERNEL_VERSION }} install
+
+      - name: List artifacts
+        run: |
+          echo "Built artifacts:"
+          find ${{ github.workspace }}/artifacts -type f -name "vm*" -o -name "config-*" | head -20
+
+      - name: Configure AWS credentials
+        uses: runloopai/configure-aws-credentials@main
+        with:
+          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role-6890ecd
+          aws-region: us-east-2
+
+      - name: Upload to S3
+        run: |
+          S3_PATH="s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.version.outputs.version_string }}/${{ matrix.arch }}/"
+          echo "Uploading to: ${S3_PATH}"
+          aws s3 cp ${{ github.workspace }}/artifacts/usr/share/kata-containers/ "${S3_PATH}" \
+            --recursive \
+            --exclude "*" \
+            --include "vmlinuz-*" \
+            --include "vmlinux-*" \
+            --include "config-*"
+          echo "Upload complete"
+
+      - name: Upload artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ matrix.arch }}-${{ steps.version.outputs.version_string }}
+          path: ${{ github.workspace }}/artifacts/usr/share/kata-containers/
+          retention-days: 7
+
+  upload-summary:
+    name: Upload Summary
+    runs-on: ubuntu-latest
+    needs: build-kernel
+    if: always() && needs.build-kernel.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version string
+        id: version
+        run: |
+          DATE=$(date +%Y%m%d)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          KERNEL_VERSION="${{ inputs.kernel_version || '6.18.5' }}"
+          VERSION_STRING="linux-${KERNEL_VERSION}-runloop-${DATE}-${SHORT_SHA}"
+          echo "version_string=${VERSION_STRING}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: runloopai/configure-aws-credentials@main
+        with:
+          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role-6890ecd
+          aws-region: us-east-2
+
+      - name: List uploaded artifacts
+        run: |
+          echo "=== S3 Upload Summary ==="
+          echo "Version: ${{ steps.version.outputs.version_string }}"
+          echo ""
+          echo "Uploaded files:"
+          aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.version.outputs.version_string }}/" --recursive
