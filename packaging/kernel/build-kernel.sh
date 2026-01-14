@@ -481,25 +481,28 @@ setup_kernel() {
 
 	get_config_and_patches
 
-	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
-
-	local major_kernel
-	major_kernel=$(get_major_kernel_version "${kernel_version}")
-	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
-	local build_type_patches_dir="${patches_path}/${major_kernel}.x/${build_type}"
-
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	(
 	cd "${kernel_path}" || exit 1
 
-	# Apply version specific patches
-	${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
+	# Apply patches if patches directory exists
+	if [ -d "${patches_path}" ]; then
+		local major_kernel
+		major_kernel=$(get_major_kernel_version "${kernel_version}")
+		local patches_dir_for_version="${patches_path}/${major_kernel}.x"
+		local build_type_patches_dir="${patches_path}/${major_kernel}.x/${build_type}"
 
-	# Apply version specific patches for build_type build
-	if [ "${build_type}" != "" ] ;then
-		info "Apply build_type patches from ${build_type_patches_dir}"
-		${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
+		# Apply version specific patches
+		${packaging_scripts_dir}/apply_patches.sh "${patches_dir_for_version}"
+
+		# Apply version specific patches for build_type build
+		if [ "${build_type}" != "" ] ;then
+			info "Apply build_type patches from ${build_type_patches_dir}"
+			${packaging_scripts_dir}/apply_patches.sh "${build_type_patches_dir}"
+		fi
+	else
+		info "No patches directory found, skipping patches"
 	fi
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
