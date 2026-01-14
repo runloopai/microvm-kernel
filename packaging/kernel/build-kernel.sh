@@ -442,7 +442,8 @@ get_config_version() {
 	if [ -f "${config_version_file}" ]; then
 		cat "${config_version_file}"
 	else
-		die "failed to find ${config_version_file}"
+		# Default to empty if no config version file exists
+		echo ""
 	fi
 }
 
@@ -569,7 +570,6 @@ install_kata() {
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	config_version=$(get_config_version)
-	[ -n "${config_version}" ] || die "failed to get config version"
 	install_path=$(readlink -m "${DESTDIR}/${PREFIX}/share/${project_name}")
 
 	suffix=""
@@ -585,8 +585,8 @@ install_kata() {
 		suffix="-${gpu_vendor}-gpu${suffix}"
 	fi
 
-	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
-	vmlinux="vmlinux-${kernel_version}-${config_version}${suffix}"
+	vmlinuz="vmlinuz"
+	vmlinux="vmlinux"
 
 	if [ -e "arch/${arch_target}/boot/bzImage" ]; then
 		bzImage="arch/${arch_target}/boot/bzImage"
@@ -612,12 +612,7 @@ install_kata() {
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
 
-	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}-${config_version}${suffix}"
-
-	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
-	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
-	ls -la "${install_path}/vmlinux${suffix}.container"
-	ls -la "${install_path}/vmlinuz${suffix}.container"
+	install --mode 0644 -D ./.config "${install_path}/config"
 	popd >>/dev/null
 }
 
