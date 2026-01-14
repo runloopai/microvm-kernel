@@ -71,7 +71,7 @@ jobs:
 
       - name: Setup kernel source
         working-directory: packaging/kernel
-        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} -f setup
+        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} -f -s setup
 
       - name: Build kernel
         working-directory: packaging/kernel
