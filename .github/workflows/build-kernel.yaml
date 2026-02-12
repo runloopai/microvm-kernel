@@ -141,8 +141,9 @@ jobs:
 
       - name: List uploaded artifacts
         run: |
-          echo "=== S3 Upload Summary ==="
-          echo "Version: ${{ steps.version.outputs.version_string }}"
-          echo ""
-          echo "Uploaded files:"
-          aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/" | grep "${{ steps.version.outputs.version_string }}"
+          echo "### === S3 Upload Summary ===" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ steps.version.outputs.version_string }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Uploaded files:" >> $GITHUB_STEP_SUMMARY
+          aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/" | grep "${{ steps.version.outputs.version_string }}" >> $GITHUB_STEP_SUMMARY
+
