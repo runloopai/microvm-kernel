@@ -65,7 +65,7 @@ jobs:
         run: |
           DATE=$(date +%Y%m%d)
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
-          VERSION_STRING="linux-${{ env.KERNEL_VERSION }}-runloop-${DATE}-${SHORT_SHA}"
+          VERSION_STRING="linux-${{ env.KERNEL_VERSION }}-runloop-yoon-test-${DATE}-${SHORT_SHA}"
           echo "version_string=${VERSION_STRING}" >> $GITHUB_OUTPUT
           echo "Generated version: ${VERSION_STRING}"
 
