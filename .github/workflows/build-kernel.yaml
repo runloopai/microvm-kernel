@@ -6,7 +6,7 @@ on:
       kernel_version:
         description: 'Kernel version to build'
         required: false
-        default: '6.18.5'
+        default: '6.18.6'
   push:
     branches:
       - main
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.5' }}
+  KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.6' }}
 
 jobs:
   build-kernel:
@@ -129,7 +129,7 @@ jobs:
         run: |
           DATE=$(date +%Y%m%d)
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
-          KERNEL_VERSION="${{ inputs.kernel_version || '6.18.5' }}"
+          KERNEL_VERSION="${{ inputs.kernel_version || '6.18.6' }}"
           VERSION_STRING="linux-${KERNEL_VERSION}-runloop-${DATE}-${SHORT_SHA}"
           echo "version_string=${VERSION_STRING}" >> $GITHUB_OUTPUT
 
