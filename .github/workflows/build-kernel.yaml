@@ -47,6 +47,7 @@ jobs:
             build-essential \
             cpio \
             curl \
+            dwarves \
             flex \
             git \
             libelf-dev \
