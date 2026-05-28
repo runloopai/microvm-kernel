@@ -20,12 +20,15 @@ env:
 
 jobs:
   build-kernel:
-    name: Build Kernel (${{ matrix.arch }})
+    name: Build Kernel (${{ matrix.arch }} / ${{ matrix.flavor }})
     runs-on:
       group: Default Larger Runners
     strategy:
       fail-fast: false
       matrix:
+        arch: [x86_64, arm64]
+        # base = pre-eBPF kernel; ebpf = eBPF tracing stack + BTF (for Tetragon).
+        flavor: [base, ebpf]
         include:
           - arch: x86_64
             build_arch: x86_64
@@ -33,6 +36,12 @@ jobs:
           - arch: arm64
             build_arch: aarch64
             cross_compile_pkgs: gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          - flavor: base
+            build_type_arg: ""
+            tarball_suffix: ""
+          - flavor: ebpf
+            build_type_arg: "-b ebpf"
+            tarball_suffix: "-ebpf"
 
     steps:
       - name: Checkout
@@ -72,13 +81,14 @@ jobs:
 
       - name: Setup kernel source
         working-directory: packaging/kernel
-        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} -f -s setup
+        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} -f -s setup
 
       - name: Build kernel
         working-directory: packaging/kernel
-        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} build
+        run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} build
 
       - name: Verify BTF symbols are present
+        if: matrix.flavor == 'ebpf'
         working-directory: packaging/kernel
         run: |
           # setup runs with -s (skip config checks), so a dropped BTF option
@@ -102,12 +112,12 @@ jobs:
         working-directory: packaging/kernel
         run: |
           mkdir -p ${{ github.workspace }}/artifacts
-          DESTDIR=${{ github.workspace }}/artifacts ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} install
+          DESTDIR=${{ github.workspace }}/artifacts ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} install
 
       - name: Create tarball
         id: tarball
         run: |
-          TARBALL_NAME="${{ steps.version.outputs.version_string }}-${{ matrix.arch }}.tar.gz"
+          TARBALL_NAME="${{ steps.version.outputs.version_string }}-${{ matrix.arch }}${{ matrix.tarball_suffix }}.tar.gz"
           echo "tarball_name=${TARBALL_NAME}" >> $GITHUB_OUTPUT
           cd ${{ github.workspace }}/artifacts/usr/share/kata-containers
           echo "Creating tarball with:"
@@ -132,7 +142,7 @@ jobs:
       - name: Upload artifacts to GitHub
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: kernel-${{ matrix.arch }}-${{ steps.version.outputs.version_string }}
+          name: kernel-${{ matrix.arch }}-${{ matrix.flavor }}-${{ steps.version.outputs.version_string }}
           path: ${{ github.workspace }}/${{ steps.tarball.outputs.tarball_name }}
           retention-days: 7
 
