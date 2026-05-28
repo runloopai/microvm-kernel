@@ -100,6 +100,8 @@ jobs:
           echo "Checking BTF in ${kernel_dir}"
           if ! grep -q '^CONFIG_DEBUG_INFO_BTF=y' "${kernel_dir}/.config"; then
             echo "ERROR: CONFIG_DEBUG_INFO_BTF was dropped from .config" >&2
+            echo "--- DEBUG_KERNEL / DEBUG_INFO / PAHOLE / BTF state ---" >&2
+            grep -E 'DEBUG_KERNEL|DEBUG_INFO|PAHOLE|BTF' "${kernel_dir}/.config" >&2 || true
             exit 1
           fi
           if ! readelf -S "${kernel_dir}/vmlinux" | grep -q '\.BTF'; then
