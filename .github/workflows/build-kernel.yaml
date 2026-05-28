@@ -131,7 +131,7 @@ jobs:
       - name: Configure AWS credentials
         uses: runloopai/configure-aws-credentials@main
         with:
-          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role-6890ecd
+          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role
           aws-region: us-east-2
 
       - name: Upload to S3
@@ -169,7 +169,7 @@ jobs:
       - name: Configure AWS credentials
         uses: runloopai/configure-aws-credentials@main
         with:
-          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role-6890ecd
+          role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role
           aws-region: us-east-2
 
       - name: List uploaded artifacts
