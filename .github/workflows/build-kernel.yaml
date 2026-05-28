@@ -78,6 +78,26 @@ jobs:
         working-directory: packaging/kernel
         run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} build
 
+      - name: Verify BTF symbols are present
+        working-directory: packaging/kernel
+        run: |
+          # setup runs with -s (skip config checks), so a dropped BTF option
+          # would not fail the build — it would silently ship a BTF-less kernel
+          # that crashes Tetragon and other CO-RE agents at startup. Guard both
+          # the config and the generated .BTF section in vmlinux.
+          kernel_dir=$(find . -maxdepth 1 -type d -name 'kata-linux-*' | head -n1)
+          [ -n "${kernel_dir}" ] || { echo "ERROR: kernel build dir not found" >&2; exit 1; }
+          echo "Checking BTF in ${kernel_dir}"
+          if ! grep -q '^CONFIG_DEBUG_INFO_BTF=y' "${kernel_dir}/.config"; then
+            echo "ERROR: CONFIG_DEBUG_INFO_BTF was dropped from .config" >&2
+            exit 1
+          fi
+          if ! readelf -S "${kernel_dir}/vmlinux" | grep -q '\.BTF'; then
+            echo "ERROR: vmlinux has no .BTF section; BTF symbols were not generated" >&2
+            exit 1
+          fi
+          echo "OK: BTF symbols present in vmlinux"
+
       - name: Install kernel artifacts
         working-directory: packaging/kernel
         run: |
