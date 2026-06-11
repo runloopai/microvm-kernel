@@ -1,0 +1,8 @@
+The ebpf build type has no kernel source patches of its own.
+
+The eBPF/BTF tracing stack is enabled entirely through config fragments
+(see packaging/kernel/build-type/ebpf), not source patches. Version-level
+patches in the parent directory (6.18.x/) still apply to this build type.
+
+This file exists so apply_patches.sh finds a directory here and treats it
+as "no patches to apply" instead of failing. See packaging/scripts/apply_patches.sh.
