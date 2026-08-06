@@ -7,9 +7,8 @@ Log the state and return code used by the virtio-mem worker while
 diagnosing runtime growth in the fork VMM.
 ---
  drivers/virtio/virtio.c     |  4 ++++
- drivers/virtio/virtio_mmio.c |  2 ++
  drivers/virtio/virtio_mem.c | 25 +++++++++++++++++++++++--
- 3 files changed, 29 insertions(+), 2 deletions(-)
+ 2 files changed, 27 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
 index 111111111111..222222222222 100644
@@ -88,19 +87,5 @@ index 333333333333..444444444444 100644
  		dev->config_change_pending = true;
  	else if (drv && drv->config_changed) {
  		drv->config_changed(dev);
-diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
-index 555555555555..666666666666 100644
---- a/drivers/virtio/virtio_mmio.c
-+++ b/drivers/virtio/virtio_mmio.c
-@@ -292,7 +292,9 @@ static irqreturn_t vm_interrupt(int irq, void *opaque)
- 	/* Read and acknowledge interrupts */
- 	status = readl(vm_dev->base + VIRTIO_MMIO_INTERRUPT_STATUS);
- 	writel(status, vm_dev->base + VIRTIO_MMIO_INTERRUPT_ACK);
- 
-+	dev_warn(&vm_dev->vdev.dev, "mmio interrupt: irq=%d status=%#lx\n",
-+		 irq, status);
- 	if (unlikely(status & VIRTIO_MMIO_INT_CONFIG)) {
- 		virtio_config_changed(&vm_dev->vdev);
- 		ret = IRQ_HANDLED;
 -- 
 2.50.1
