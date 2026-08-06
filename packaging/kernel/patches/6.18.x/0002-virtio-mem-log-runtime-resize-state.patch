@@ -6,13 +6,31 @@ Subject: [PATCH] virtio-mem: log runtime resize state
 Log the state and return code used by the virtio-mem worker while
 diagnosing runtime growth in the fork VMM.
 ---
- drivers/virtio/virtio_mem.c | 15 +++++++++++++++
- 1 file changed, 15 insertions(+)
+ drivers/virtio/virtio_mem.c | 25 +++++++++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
 index 111111111111..222222222222 100644
 --- a/drivers/virtio/virtio_mem.c
 +++ b/drivers/virtio/virtio_mem.c
+@@ -824,10 +824,16 @@ static int virtio_mem_bbm_offline_and_remove_bb(struct virtio_mem *vm,
+ static void virtio_mem_retry(struct virtio_mem *vm)
+ {
+ 	unsigned long flags;
++	bool queued = false;
+ 
+ 	spin_lock_irqsave(&vm->removal_lock, flags);
+ 	if (!vm->removing)
+-		queue_work(system_freezable_wq, &vm->wq);
++		queued = queue_work(system_freezable_wq, &vm->wq);
+ 	spin_unlock_irqrestore(&vm->removal_lock, flags);
++	dev_warn(&vm->vdev->dev,
++		 "retry: removing=%d queued=%d pending=%d active=%d\n",
++		 vm->removing, queued, work_pending(&vm->wq),
++		 atomic_read(&vm->wq_active));
+ }
+ 
+ static int virtio_mem_translate_node_id(struct virtio_mem *vm, uint16_t node_id)
 @@ -2441,6 +2441,17 @@ retry:
  		virtio_mem_refresh_config(vm);
  	}
@@ -42,5 +60,15 @@ index 111111111111..222222222222 100644
  	/*
  	 * Keep retrying to offline and remove completely unplugged Linux
  	 * memory blocks.
+@@ -3074,6 +3084,9 @@ static void virtio_mem_config_changed(struct virtio_device *vdev)
+ {
+ 	struct virtio_mem *vm = vdev->priv;
+ 
++	dev_warn(&vdev->dev, "config changed: kdump=%d removing=%d active=%d\n",
++		 vm->in_kdump, vm->removing, atomic_read(&vm->wq_active));
++
+ 	if (unlikely(vm->in_kdump))
+ 		return;
+ 
 -- 
 2.50.1
