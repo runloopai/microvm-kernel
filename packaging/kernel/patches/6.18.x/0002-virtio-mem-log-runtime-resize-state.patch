@@ -6,8 +6,9 @@ Subject: [PATCH] virtio-mem: log runtime resize state
 Log the state and return code used by the virtio-mem worker while
 diagnosing runtime growth in the fork VMM.
 ---
+ drivers/virtio/virtio.c     |  4 ++++
  drivers/virtio/virtio_mem.c | 25 +++++++++++++++++++++++--
- 1 file changed, 23 insertions(+), 2 deletions(-)
+ 2 files changed, 27 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
 index 111111111111..222222222222 100644
@@ -70,5 +71,21 @@ index 111111111111..222222222222 100644
  	if (unlikely(vm->in_kdump))
  		return;
  
+diff --git a/drivers/virtio/virtio.c b/drivers/virtio/virtio.c
+index 333333333333..444444444444 100644
+--- a/drivers/virtio/virtio.c
++++ b/drivers/virtio/virtio.c
+@@ -126,7 +126,11 @@ static void __virtio_config_changed(struct virtio_device *dev)
+ {
+ 	struct virtio_driver *drv = drv_to_virtio(dev->dev.driver);
+ 
++	dev_warn(&dev->dev,
++		 "core config changed: core_enabled=%d driver_disabled=%d driver=%ps callback=%ps\n",
++		 dev->config_core_enabled, dev->config_driver_disabled, drv,
++		 drv ? drv->config_changed : NULL);
+ 	if (!dev->config_core_enabled || dev->config_driver_disabled)
+ 		dev->config_change_pending = true;
+ 	else if (drv && drv->config_changed) {
+ 		drv->config_changed(dev);
 -- 
 2.50.1
