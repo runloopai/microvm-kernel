@@ -13,7 +13,7 @@ diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
 index 111111111111..222222222222 100644
 --- a/drivers/virtio/virtio_mem.c
 +++ b/drivers/virtio/virtio_mem.c
-@@ -824,10 +824,16 @@ static int virtio_mem_bbm_offline_and_remove_bb(struct virtio_mem *vm,
+@@ -824,11 +824,16 @@ static int virtio_mem_bbm_offline_and_remove_bb(struct virtio_mem *vm,
  static void virtio_mem_retry(struct virtio_mem *vm)
  {
  	unsigned long flags;
@@ -31,7 +31,7 @@ index 111111111111..222222222222 100644
  }
  
  static int virtio_mem_translate_node_id(struct virtio_mem *vm, uint16_t node_id)
-@@ -2441,6 +2441,17 @@ retry:
+@@ -2441,6 +2446,17 @@ retry:
  		virtio_mem_refresh_config(vm);
  	}
  
@@ -49,7 +49,7 @@ index 111111111111..222222222222 100644
  	/* Cleanup any leftovers from previous runs */
  	if (!rc)
  		rc = virtio_mem_cleanup_pending_mb(vm);
-@@ -2456,6 +2468,10 @@ retry:
+@@ -2456,6 +2472,10 @@ retry:
  		}
  	}
  
@@ -60,7 +60,7 @@ index 111111111111..222222222222 100644
  	/*
  	 * Keep retrying to offline and remove completely unplugged Linux
  	 * memory blocks.
-@@ -3074,6 +3084,9 @@ static void virtio_mem_config_changed(struct virtio_device *vdev)
+@@ -3074,6 +3094,9 @@ static void virtio_mem_config_changed(struct virtio_device *vdev)
  {
  	struct virtio_mem *vm = vdev->priv;
  
