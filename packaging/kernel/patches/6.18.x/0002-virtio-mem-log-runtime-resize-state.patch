@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Adam <adam@runloop.ai>
+Date: Thu, 6 Aug 2026 00:00:00 +0000
+Subject: [PATCH] virtio-mem: log runtime resize state
+
+Log the state and return code used by the virtio-mem worker while
+diagnosing runtime growth in the fork VMM.
+---
+ drivers/virtio/virtio_mem.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
+index 000000000000..111111111111 100644
+--- a/drivers/virtio/virtio_mem.c
++++ b/drivers/virtio/virtio_mem.c
+@@ -2441,6 +2441,17 @@ retry:
+ 		virtio_mem_refresh_config(vm);
+ 	}
+ 
++	dev_warn(&vm->vdev->dev,
++		 "resize worker: requested=0x%llx plugged=0x%llx "
++		 "offline=0x%llx threshold=0x%llx usable=0x%llx "
++		 "first_mb=%lu next_mb=%lu last_mb=%lu\n",
++		 vm->requested_size, vm->plugged_size,
++		 atomic64_read(&vm->offline_size), vm->offline_threshold,
++		 vm->usable_region_size,
++		 vm->in_sbm ? vm->sbm.first_mb_id : 0,
++		 vm->in_sbm ? vm->sbm.next_mb_id : 0,
++		 vm->in_sbm ? vm->sbm.last_usable_mb_id : 0);
++
+ 	/* Cleanup any leftovers from previous runs */
+ 	if (!rc)
+ 		rc = virtio_mem_cleanup_pending_mb(vm);
+@@ -2456,6 +2468,10 @@ retry:
+ 		}
+ 	}
+ 
++	dev_warn(&vm->vdev->dev,
++		 "resize worker result: rc=%d requested=0x%llx plugged=0x%llx\n",
++		 rc, vm->requested_size, vm->plugged_size);
++
+ 	/*
+ 	 * Keep retrying to offline and remove completely unplugged Linux
+ 	 * memory blocks.
+-- 
+2.50.1
