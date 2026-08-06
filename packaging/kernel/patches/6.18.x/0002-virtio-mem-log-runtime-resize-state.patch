@@ -10,7 +10,7 @@ diagnosing runtime growth in the fork VMM.
  1 file changed, 15 insertions(+)
 
 diff --git a/drivers/virtio/virtio_mem.c b/drivers/virtio/virtio_mem.c
-index 000000000000..111111111111 100644
+index 111111111111..222222222222 100644
 --- a/drivers/virtio/virtio_mem.c
 +++ b/drivers/virtio/virtio_mem.c
 @@ -2441,6 +2441,17 @@ retry:
