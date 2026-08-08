@@ -87,6 +87,21 @@ jobs:
         working-directory: packaging/kernel
         run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} build
 
+      - name: Verify NFSv3 client support is present
+        working-directory: packaging/kernel
+        run: |
+          kernel_dir=$(find . -maxdepth 1 -type d -name 'kata-linux-*' | head -n1)
+          [ -n "${kernel_dir}" ] || { echo "ERROR: kernel build dir not found" >&2; exit 1; }
+          echo "Checking NFS client support in ${kernel_dir}"
+          for option in CONFIG_NFS_FS CONFIG_NFS_V3 CONFIG_NFS_DISABLE_UDP_SUPPORT CONFIG_SUNRPC CONFIG_LOCKD; do
+            if ! grep -q "^${option}=y" "${kernel_dir}/.config"; then
+              echo "ERROR: ${option}=y is missing from the generated kernel config" >&2
+              grep -E 'NFS|SUNRPC|LOCKD' "${kernel_dir}/.config" >&2 || true
+              exit 1
+            fi
+          done
+          echo "OK: NFSv3 TCP client support present"
+
       - name: Verify BTF symbols are present
         if: matrix.flavor == 'ebpf'
         working-directory: packaging/kernel
