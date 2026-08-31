@@ -13,7 +13,9 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  # contents: write lets each build push a per-artifact source tag (GPL
+  # complete-corresponding-source correspondence).
+  contents: write
 
 env:
   KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.32' }}
@@ -147,6 +149,22 @@ jobs:
           name: kernel-${{ matrix.arch }}-${{ matrix.flavor }}-${{ steps.version.outputs.version_string }}
           path: ${{ github.workspace }}/${{ steps.tarball.outputs.tarball_name }}
           retention-days: 7
+
+      - name: Tag source for this artifact
+        # Push a git tag named after the tarball (sans extension) so every
+        # shipped kernel binary maps to the exact source commit that built it.
+        # Idempotent: re-runs of a commit skip the push if the tag exists.
+        env:
+          TARBALL_NAME: ${{ steps.tarball.outputs.tarball_name }}
+        run: |
+          TAG_NAME="${TARBALL_NAME%.tar.gz}"
+          if git ls-remote --exit-code origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists; skipping"
+          else
+            git tag "${TAG_NAME}" HEAD
+            git push origin "refs/tags/${TAG_NAME}"
+            echo "Pushed tag ${TAG_NAME}"
+          fi
 
   upload-summary:
     name: Upload Summary

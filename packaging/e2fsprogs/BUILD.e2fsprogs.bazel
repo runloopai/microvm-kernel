@@ -1,0 +1,187 @@
+"""BUILD file for e2fsprogs host tools and libraries using rules_foreign_cc.
+
+This uses configure_make to build mke2fs and the libext2fs static libraries
+hermetically.
+"""
+
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
+
+package(default_visibility = ["//visibility:public"])
+
+# Guest CPU of the cross-compile, used to pick the autoconf `--host` triple.
+config_setting(
+    name = "target_linux_arm64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:linux",
+    ],
+)
+
+config_setting(
+    name = "target_linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+)
+
+config_setting(
+    name = "target_macos_arm64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:osx",
+    ],
+)
+
+filegroup(
+    name = "all_srcs",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "**/.git/**",
+            "**/tests/**",
+        ],
+    ),
+)
+
+# Build mke2fs and the libraries used by host-side ext filesystem tooling.
+configure_make(
+    name = "e2fsprogs_build",
+    configure_in_place = True,
+    configure_options = [
+        "--disable-nls",
+        "--disable-rpath",
+        "--disable-fuse2fs",
+        "--disable-defrag",
+        "--disable-debugfs",
+        "--disable-imager",
+        "--disable-resizer",
+        "--disable-uuidd",
+        "--disable-fsck",
+        "--disable-e2initrd-helper",
+        "--enable-symlink-install=no",
+        "--enable-relative-symlinks=no",
+        "--enable-symlink-build=no",
+        "--enable-libuuid",
+        "--enable-libblkid",
+    ] + select({
+        # Cross-compiling: autoconf cannot run the target binary to probe it.
+        ":target_linux_arm64": ["--host=aarch64-linux-musl"],
+        ":target_linux_x86_64": ["--host=x86_64-linux-musl"],
+        # Darwin's libtool has incompatible archive syntax. The system `ar`
+        # emits the portable archive format expected by the static linker.
+        ":target_macos_arm64": ["AR=ar"],
+    }),
+    env = {
+        "CFLAGS": "-O2",
+    },
+    lib_source = ":all_srcs",
+    out_binaries = [],
+    out_data_dirs = ["sbin"],
+    out_headers_only = False,
+    out_shared_libs = [],
+    out_static_libs = [
+        "libext2fs.a",
+        "libe2p.a",
+        "libcom_err.a",
+    ],
+    # Build and install libraries before installing mke2fs into sbin.
+    targets = [
+        "libs",
+        "install-libs",
+        "-C misc mke2fs",
+        "-C misc install",
+    ],
+    visibility = ["//visibility:public"],
+    alwayslink = True,
+)
+
+# Extract just the mke2fs binary from the sbin directory
+genrule(
+    name = "mke2fs",
+    srcs = [":e2fsprogs_build"],
+    outs = ["mke2fs.bin"],
+    cmd = "for f in $(locations :e2fsprogs_build); do if $(location @ape//ape:test) -d \"$$f\" && $(location @ape//ape:test) -f \"$$f/mke2fs\"; then $(location @ape//ape:cp) \"$$f/mke2fs\" $@; break; fi; done",
+    executable = True,
+    tools = [
+        "@ape//ape:cp",
+        "@ape//ape:test",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# Statically-linked resize2fs for the guest, cross-compiled to the *target*
+# platform (Linux musl arm64/x86_64 via the zig toolchain) rather than the exec
+# host. Unlike :mke2fs above — a build-time tool that runs on the host — this is
+# embedded in the vmagent initrd and execs inside the MicroVM to grow the rootfs
+# offline before mount. `LDFLAGS=-static` yields a self-contained binary with no
+# loader/libc dependency in the guest.
+configure_make(
+    name = "resize2fs_build",
+    configure_in_place = True,
+    configure_options = [
+        "--disable-nls",
+        "--disable-rpath",
+        "--disable-fuse2fs",
+        "--disable-defrag",
+        "--disable-debugfs",
+        "--disable-imager",
+        "--disable-uuidd",
+        "--disable-fsck",
+        "--disable-e2initrd-helper",
+        "--enable-symlink-install=no",
+        "--enable-relative-symlinks=no",
+        "--enable-symlink-build=no",
+        "--enable-libuuid",
+        "--enable-libblkid",
+    ] + select({
+        # Cross-compiling: autoconf can't run the target binary to probe, so name
+        # the host triple explicitly.
+        ":target_linux_arm64": ["--host=aarch64-linux-musl"],
+        ":target_linux_x86_64": ["--host=x86_64-linux-musl"],
+        ":target_macos_arm64": [],
+    }),
+    # Build portable binaries instead of selecting CPU features from the machine
+    # running configure. Zig accepts `baseline` for both supported architectures.
+    env = {
+        "CFLAGS": "-O2 -mcpu=baseline",
+        "CXXFLAGS": "-mcpu=baseline",
+        "LDFLAGS": "-static",
+    },
+    lib_source = ":all_srcs",
+    out_binaries = [],
+    out_data_dirs = ["sbin"],
+    out_headers_only = True,
+    out_shared_libs = [],
+    out_static_libs = [],
+    targets = [
+        "libs",
+        "-C resize resize2fs",
+        "-C resize install",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# Extract just the resize2fs binary from the sbin directory.
+genrule(
+    name = "resize2fs_for_target",
+    srcs = [":resize2fs_build"],
+    outs = ["resize2fs.bin"],
+    cmd = "for f in $(locations :resize2fs_build); do if $(location @ape//ape:test) -d \"$$f\" && $(location @ape//ape:test) -f \"$$f/resize2fs\"; then $(location @ape//ape:cp) \"$$f/resize2fs\" $@; break; fi; done",
+    executable = True,
+    tools = [
+        "@ape//ape:cp",
+        "@ape//ape:test",
+    ],
+)
+
+platform_transition_filegroup(
+    name = "resize2fs",
+    srcs = [":resize2fs_for_target"],
+    target_platform = select({
+        "@platforms//cpu:aarch64": "@//:linux_arm64",
+        "@platforms//cpu:x86_64": "@//:linux_x86_64",
+    }),
+    visibility = ["//visibility:public"],
+)
