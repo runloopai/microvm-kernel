@@ -11,10 +11,26 @@ built from:
 - the build scripts in this repository (`packaging/kernel/build-kernel.sh` and
   `packaging/scripts/`).
 
-Every kernel artifact build pushes a git tag named after the artifact tarball
-(sans extension), so each shipped binary maps to the exact commit of this
-repository — and thereby the exact patches, config, and scripts — used to
-build it.
+Each kernel artifact name contains the seven-character prefix of its source
+commit. New artifacts also contain a `SOURCE_PROVENANCE` file beside `vmlinux`
+that records the artifact name, the full source commit, architecture, build
+flavor, source repository, and workflow run. The full commit is authoritative;
+the abbreviated hash in the filename is only for readability.
+
+## Artifacts predating embedded provenance
+
+The following shipped artifacts predate `SOURCE_PROVENANCE`. Their SHA-256
+checksums identify the binaries, and successful [workflow run
+27325651087](https://github.com/runloopai/microvm-kernel/actions/runs/27325651087)
+maps all four builds to full source commit
+[`186e48bece2f20747265ecaa2a13fdeb4445f9b2`](https://github.com/runloopai/microvm-kernel/commit/186e48bece2f20747265ecaa2a13fdeb4445f9b2).
+
+| Artifact | SHA-256 |
+|---|---|
+| `linux-6.18.32-runloop-20260611-186e48b-x86_64.tar.gz` | `a75f8ad56327e103858fb7530215930f4983d530d14a362cbabc4f350604c3aa` |
+| `linux-6.18.32-runloop-20260611-186e48b-x86_64-ebpf.tar.gz` | `ff7b967228eb112a09c492592c86cab0d0af455219461e4a1a23fc7eda2c96d9` |
+| `linux-6.18.32-runloop-20260611-186e48b-arm64.tar.gz` | `4bed56ba93e0e98a524fe9e8c0658f8bdb850943055966f8facffadacc2bd3e7` |
+| `linux-6.18.32-runloop-20260611-186e48b-arm64-ebpf.tar.gz` | `adb646ecb660138314167b9725a5f45fda35ff67f934980258b3e55e696cb359` |
 
 ## Licenses
 

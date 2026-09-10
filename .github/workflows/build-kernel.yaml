@@ -13,9 +13,7 @@ on:
 
 permissions:
   id-token: write
-  # contents: write lets each build push a per-artifact source tag (GPL
-  # complete-corresponding-source correspondence).
-  contents: write
+  contents: read
 
 env:
   KERNEL_VERSION: ${{ inputs.kernel_version || '6.18.32' }}
@@ -123,6 +121,14 @@ jobs:
         run: |
           TARBALL_NAME="${{ steps.version.outputs.version_string }}-${{ matrix.arch }}${{ matrix.tarball_suffix }}.tar.gz"
           echo "tarball_name=${TARBALL_NAME}" >> $GITHUB_OUTPUT
+          cat > ${{ github.workspace }}/artifacts/usr/share/kata-containers/SOURCE_PROVENANCE <<EOF
+          artifact=${TARBALL_NAME}
+          source_repository=https://github.com/${GITHUB_REPOSITORY}
+          source_commit=${GITHUB_SHA}
+          architecture=${{ matrix.arch }}
+          flavor=${{ matrix.flavor }}
+          workflow_run=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
           cd ${{ github.workspace }}/artifacts/usr/share/kata-containers
           echo "Creating tarball with:"
           ls -la
@@ -149,22 +155,6 @@ jobs:
           name: kernel-${{ matrix.arch }}-${{ matrix.flavor }}-${{ steps.version.outputs.version_string }}
           path: ${{ github.workspace }}/${{ steps.tarball.outputs.tarball_name }}
           retention-days: 7
-
-      - name: Tag source for this artifact
-        # Push a git tag named after the tarball (sans extension) so every
-        # shipped kernel binary maps to the exact source commit that built it.
-        # Idempotent: re-runs of a commit skip the push if the tag exists.
-        env:
-          TARBALL_NAME: ${{ steps.tarball.outputs.tarball_name }}
-        run: |
-          TAG_NAME="${TARBALL_NAME%.tar.gz}"
-          if git ls-remote --exit-code origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
-            echo "Tag ${TAG_NAME} already exists; skipping"
-          else
-            git tag "${TAG_NAME}" HEAD
-            git push origin "refs/tags/${TAG_NAME}"
-            echo "Pushed tag ${TAG_NAME}"
-          fi
 
   upload-summary:
     name: Upload Summary
@@ -197,4 +187,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Uploaded files:" >> $GITHUB_STEP_SUMMARY
           aws s3 ls "s3://runloop-apt-prod-us-east-2/microvm-kernel/" | grep "${{ steps.version.outputs.version_string }}" >> $GITHUB_STEP_SUMMARY
-
