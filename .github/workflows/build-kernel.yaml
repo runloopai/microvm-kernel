@@ -85,6 +85,12 @@ jobs:
         working-directory: packaging/kernel
         run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} -f -s setup
 
+      - name: Verify storage configuration
+        working-directory: packaging/kernel
+        run: |
+          kernel_dir=$(find . -maxdepth 1 -type d -name 'kata-linux-*' | head -n1)
+          bash verify-storage-config.sh "${kernel_dir}/.config"
+
       - name: Build kernel
         working-directory: packaging/kernel
         run: ./build-kernel.sh -a ${{ matrix.build_arch }} -v ${{ env.KERNEL_VERSION }} ${{ matrix.build_type_arg }} build
@@ -131,12 +137,14 @@ jobs:
           ls -lh ${{ github.workspace }}/${TARBALL_NAME}
 
       - name: Configure AWS credentials
+        if: github.ref == 'refs/heads/main'
         uses: runloopai/configure-aws-credentials@main
         with:
           role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role
           aws-region: us-east-2
 
       - name: Upload to S3
+        if: github.ref == 'refs/heads/main'
         run: |
           S3_PATH="s3://runloop-apt-prod-us-east-2/microvm-kernel/${{ steps.tarball.outputs.tarball_name }}"
           echo "Uploading to: ${S3_PATH}"
@@ -151,6 +159,7 @@ jobs:
           retention-days: 7
 
       - name: Tag source for this artifact
+        if: github.ref == 'refs/heads/main'
         # Push a git tag named after the tarball (sans extension) so every
         # shipped kernel binary maps to the exact source commit that built it.
         # Idempotent: re-runs of a commit skip the push if the tag exists.
@@ -170,7 +179,7 @@ jobs:
     name: Upload Summary
     runs-on: ubuntu-slim
     needs: build-kernel
-    if: always() && needs.build-kernel.result == 'success'
+    if: always() && needs.build-kernel.result == 'success' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: runloopai/checkout@main
@@ -185,6 +194,7 @@ jobs:
           echo "version_string=${VERSION_STRING}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
+        if: github.ref == 'refs/heads/main'
         uses: runloopai/configure-aws-credentials@main
         with:
           role-to-assume: arn:aws:iam::992382648534:role/Github-OIDC-Deploy-Role
